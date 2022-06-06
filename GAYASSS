@@ -1,0 +1,140 @@
+local Player = game:GetService("Players").LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local Mouse = Player:GetMouse()
+
+local ESPLib = loadstring(game:HttpGet("https://pastebin.com/raw/WX7VYFbU"))()
+
+local Settings = {
+    Smoothness = 0;
+    Fov = 200;
+    MaxWalls = 1000000;
+    MaxDistance = 350;
+    AutoShoot = true;
+    Perspective = {
+        AutoDetectPerspective = false;
+		FirstPerson = true;
+    }
+}
+
+_G.on = true
+_G.kill_process = false
+
+function DrawFov()
+    task.spawn(function()
+        local Circle = Drawing.new("Circle");
+        Circle.Thickness = 0.2; 
+        Circle.NumSides = 64;
+        Circle.Radius = Settings.Fov;
+        Circle.Color = Color3.fromRGB(255,255,255)
+        Circle.Visible = true;
+        
+        game:GetService("RunService").RenderStepped:Connect(function()
+            Circle.Position = Vector2.new(Mouse.X, Mouse.Y + 34);
+        end)
+    end)
+end
+
+function IsFirstPerson()
+	if Settings.Perspective.AutoDetectPerspective == false then
+		return Settings.Perspective.FirstPerson
+	end
+	
+    local Character = Player.Character
+    if not Character or not Character:FindFirstChild("Head") then return false end
+    return (Character.Head.CFrame.p - workspace.CurrentCamera.CFrame.p).Magnitude < 1
+end
+
+function IsObscured(Part)
+    local Character = Player.Character
+    if not Character or (Character and not Character.PrimaryPart) then return true end
+
+    local Parts = workspace.CurrentCamera:GetPartsObscuringTarget({Character.PrimaryPart.Position, Part.Position}, {})
+
+    for i,v in pairs(Parts) do
+        if v:IsDescendantOf(Character) or not v:IsA("BasePart") or v.Parent:IsA("Accessory") or v:IsA("Accessory") then
+            table.remove(Parts, i)
+        end
+    end
+    
+    if #Parts > Settings.MaxWalls then
+        return true
+    end
+
+    return false
+end
+
+function GetClosestCharacter()
+    local Last = math.huge;
+    local LastCharacter = nil;
+    local Fov = Settings.Fov;
+    local MaxDist = Settings.MaxDistance;
+    for i,v in pairs(game:GetService("Players"):GetPlayers()) do
+        local Character = v.Character
+        if Character and Character.PrimaryPart and v.Name ~= Player.Name then 
+			local MousePos = UserInputService:GetMouseLocation();
+			local ScreenPos, OnScreen = workspace.CurrentCamera:WorldToScreenPoint(Character.PrimaryPart.Position)
+			local PlayerPos = Vector2.new(ScreenPos.X, ScreenPos.Y)
+
+			local Dist = (MousePos - PlayerPos).Magnitude
+			local WorldDist = (Character.PrimaryPart.Position - Player.Character.PrimaryPart.Position).Magnitude
+			local Obscured = IsObscured(Character.PrimaryPart)
+			
+			if OnScreen and Dist <= Fov and WorldDist <= MaxDist and Dist < Last and not Obscured then
+				LastCharacter = Character;
+				Last = Dist;
+			end
+		end
+    end
+    return LastCharacter
+end
+
+local Target = nil
+function Aimbot()
+    while _G.on == true do
+        if _G.kill_process == true then
+            break
+        end
+
+		game:GetService("RunService").RenderStepped:Wait()
+        if UserInputService:IsKeyDown(Enum.KeyCode.E) then
+            local ClosestCharacter = GetClosestCharacter();
+            if not ClosestCharacter or not ClosestCharacter.PrimaryPart then continue end
+
+			if Target ~= nil then ClosestCharacter = Target else Target = ClosestCharacter end
+			
+            local LockPos = workspace.CurrentCamera:WorldToScreenPoint((ClosestCharacter:FindFirstChild("Head"):GetRenderCFrame()).Position)
+
+            if IsFirstPerson() == false then
+            	if Settings.Smoothness ~= 0 then
+					for i = 0, 1, 1/Settings.Smoothness do
+						mousemoverel((LockPos.X - Mouse.X) * i, (LockPos.Y - Mouse.Y) * i)
+						if Settings.Smoothness ~= 1 then
+							task.wait(1/(Settings.Smoothness * 500))    
+						end
+					end
+				end
+				mousemoverel((LockPos.X - Mouse.X), (LockPos.Y - Mouse.Y))
+            else
+                if Settings.Smoothness ~= 0 then
+					for i = 0, 1, 1/Settings.Smoothness do
+						mousemoverel((LockPos.X - Mouse.X) * 0.2, (LockPos.Y - Mouse.Y) * 0.2)
+						
+						if Settings.Smoothness ~= 1 then
+							task.wait(1/(Settings.Smoothness * 500))    
+						end
+					end
+				end
+				mousemoverel((LockPos.X - Mouse.X) * 0.2, (LockPos.Y - Mouse.Y) * 0.2)
+            end
+            if Settings.AutoShoot == true then
+                keypress(0x01)
+            end
+        else
+			Target = nil
+        end
+    end
+end
+
+ESPLib:DrawBoxPlayers();
+DrawFov();
+Aimbot();
